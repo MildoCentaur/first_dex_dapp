@@ -1,5 +1,6 @@
 const Dex = artifacts.require("Dex")
 const USDT = artifacts.require("USDT")
+const { ErrorType } = require('truffle-assertions');
 const truffleAssert = require('truffle-assertions')
 contract("Wallet", accounts=>{
     const USDT_TICKER = web3.utils.fromUtf8("USDT");
@@ -32,7 +33,7 @@ contract("Wallet", accounts=>{
     it("Should handle falty withdrawals correctly", async() => {
         let dex = await Dex.deployed();
         let balance = (await dex.balances(accounts[0], USDT_TICKER)).toNumber();
-        await truffleAssert.reverts(dex.withdraw(600, USDT_TICKER), "balance should be bigger thant the amount");
+        await truffleAssert.fails(dex.withdraw(600, USDT_TICKER),ErrorType.REVERT, "balance should be bigger thant the amount");
       
     })
 

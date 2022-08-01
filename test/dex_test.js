@@ -1,23 +1,19 @@
 const Dex = artifacts.require("Dex")
 const USDT = artifacts.require("USDT")
 const truffleAssert = require('truffle-assertions')
-// const assert = require("chai").assert;
-
+const assert = require("chai").assert;
+truffleAssert.ErrorType.REVERT='Revert'
 contract("Dex", accounts=>{
     const USDT_TICKER = web3.utils.fromUtf8("USDT");
-    const ETH_TICKER = web3.utils.fromUtf8("ETH");
-    const LINK_TICKER = web3.utils.fromUtf8("LINK");
     const PRICE = 1; 
     const BUY = 0;
     const SELL = 1;
     
     it("Should throw an error if ticker dosn't exist", async () => {
         let dex = await Dex.deployed();
-        let usdt = await USDT.deployed();
-        
         await truffleAssert.reverts(
-            dex.createLimitOrder(USDT_TICKER, SELL, 1, PRICE , {from: accounts[1]}),null,
-            "Token should be registered first", "Token should be registered first"
+            dex.createLimitOrder(USDT_TICKER, SELL, 1, PRICE , {from: accounts[1]}), 
+            "Token should be registered first"
         )
     }) 
 
@@ -27,7 +23,8 @@ contract("Dex", accounts=>{
         await dex.registerToken(USDT_TICKER, usdt.address, {from:accounts[0]});
         
         await truffleAssert.reverts(
-           dex.createLimitOrder(USDT_TICKER, BUY, 1, PRICE , {from: accounts[1]}, "Sender doesn't have enougth ETH to buy")
+           dex.createLimitOrder(USDT_TICKER, BUY, 1, PRICE , {from: accounts[1]}),
+           "Sender doesn't have enougth ETH to buy"
         )
         
         await dex.depositEth({value:10,from: accounts[1]});
@@ -44,7 +41,8 @@ contract("Dex", accounts=>{
         await dex.registerToken(USDT_TICKER, usdt.address, {from:accounts[0]});
         
         await truffleAssert.reverts(
-            dex.createLimitOrder(USDT_TICKER, SELL, 1, PRICE , {from: accounts[1]}, "Sender doesn't have enougth ETH to sell")
+            dex.createLimitOrder(USDT_TICKER, SELL, 1, PRICE , {from: accounts[1]}),
+            "Sender doesn't have enougth TOKEN to sell"
         )
         await usdt.transfer(accounts[1], 500);
         await usdt.approve(dex.address, 500, {from:accounts[1]});
@@ -56,6 +54,7 @@ contract("Dex", accounts=>{
 
     it("The Buy order book should be ordered on price from highest to lowest starting at index 0", async () => {
         let dex = await Dex.deployed();
+        await dex.depositEth({value:100,from: accounts[1]});
         await dex.createLimitOrder(USDT_TICKER, BUY, 1, PRICE , {from: accounts[1]});
         await dex.createLimitOrder(USDT_TICKER, BUY, 1, PRICE+1 , {from: accounts[1]});
         await dex.createLimitOrder(USDT_TICKER, BUY, 1, PRICE+2 , {from: accounts[1]});
@@ -69,6 +68,11 @@ contract("Dex", accounts=>{
 
     it("The Sell order book should be ordered on price from  lowest to highest starting at index 0", async () => {
         let dex = await Dex.deployed();
+        let usdt = await USDT.deployed();
+        await usdt.transfer(accounts[1], 500);
+        await usdt.approve(dex.address, 500, {from:accounts[1]});
+        await dex.deposit(10, USDT_TICKER, {from:accounts[1]});
+
         await dex.createLimitOrder(USDT_TICKER, SELL, 1, PRICE+2 , {from: accounts[1]});
         await dex.createLimitOrder(USDT_TICKER, SELL, 1, PRICE+1 , {from: accounts[1]});
         await dex.createLimitOrder(USDT_TICKER, SELL, 1, PRICE , {from: accounts[1]});
@@ -370,31 +374,23 @@ contract("Dex - Market orders", accounts=>{
             await usdt.transfer(sellerAccount, 500);
             await usdt.approve(dex.address, 500, {from:sellerAccount});
             await dex.deposit(100, USDT_TICKER, {from:sellerAccount});
-
             await usdt.transfer(anotherSellerAccount, 500);
             await usdt.approve(dex.address, 500, {from:anotherSellerAccount});
             await dex.deposit(100, USDT_TICKER, {from:anotherSellerAccount});
-
             await dex.depositEth({value:1000,from: buyerAccount});
-            await dex.depositEth({value:1000,from: anotherBuyerAccount});
-            
             
             ETHBuyerAccountStartBalance = (await dex.balances(buyerAccount, ETH_TICKER)).toNumber();
             ETHSellerAccountStartBalance= (await dex.balances(sellerAccount, ETH_TICKER)).toNumber();
-            ETHAnotherSellerAccountStartBalance=(await dex.balances(anotherSellerAccount, ETH_TICKER)).toNumber();
-
+            ETHAnotherSellerAccountStartBalance= (await dex.balances(anotherSellerAccount, ETH_TICKER)).toNumber();
             USDTBuyerAccountStartBalance= (await dex.balances(buyerAccount, USDT_TICKER)).toNumber();
             USDTSellerAccountStartBalance= (await dex.balances(sellerAccount, USDT_TICKER)).toNumber();
             USDTAnotherSellerAccountStartBalance= (await dex.balances(anotherSellerAccount, USDT_TICKER)).toNumber();
-            
             assert.equal(USDTSellerAccountStartBalance, 100, "sellerAccount USDT start balance should be 100");
             assert.equal(USDTAnotherSellerAccountStartBalance, 100, "AnotherSellerAccount USDT start balance should be 100");
             assert.equal(USDTBuyerAccountStartBalance, 0, "buyerAccount USDT start balance should be 0");
-            
             assert.equal(ETHSellerAccountStartBalance, 0, "sellerAccount ETH start balance should be 0");
             assert.equal(ETHAnotherSellerAccountStartBalance, 0, "AnotherSellerAccount ETH start balance should be 0");
             assert.equal(ETHBuyerAccountStartBalance, 1000, "buyerAccount ETH start balance should be 100");
-            
             ordersBuyStart  = await dex.getOrderBook(USDT_TICKER, BUY);
             assert.equal(ordersBuyStart.length, 0, "Buyer orderbook for ticker should be empty");
             ordersSellStart  = await dex.getOrderBook(USDT_TICKER, SELL);
